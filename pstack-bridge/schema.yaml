@@ -1,0 +1,412 @@
+name: pstack-bridge
+version: 1
+description: >
+  Spec-driven workflow integrated with pstack skills.
+  Requirements: pstack plugin installed, providing skills:
+  sharpen, in-your-own-words, architect, poteto-mode, show-me-your-work,
+  reflect, make-pr-easy-to-review. Works on any pstack-supported runtime
+  (Claude Code, Codex, Pi) because pstack:poteto-mode is a prose router,
+  not a subagent-only skill.
+  brainstorm -> proposal -> specs -> tasks -> plan -> verify -> retrospective.
+  design is required (reorganizes raw brainstorm output into structured
+  Context / Goals / Decisions / Risks / Migration; referenced by tasks
+  and plan for implementation guidance).
+  Apply phase hands plan.md to pstack:poteto-mode, which routes to the
+  right pstack playbook (feature / bug-fix / refactoring / perf-issue)
+  based on the proposal and plan. TDD is NOT mandated here; pstack's
+  own tdd skill is opt-in and poteto-mode decides.
+  Each artifact / apply step verifies its required skills before
+  invoking and surfaces a clear error if any are missing.
+
+artifacts:
+  - id: brainstorm
+    generates: brainstorm.md
+    description: Collaborative design exploration using pstack sharpen + architect
+    template: brainstorm.md
+    instruction: |
+      PRECHECK - required skill availability:
+      Before invoking, confirm these skills appear in your available
+      skills list:
+        - pstack:sharpen
+        - pstack:in-your-own-words
+        - pstack:architect
+      If any are missing, STOP and inform the user that the pstack
+      plugin must be installed (or that they can explicitly opt to
+      write brainstorm.md manually using the template below). Do NOT
+      silently fall back.
+
+      Run the brainstorm in three passes, writing each pass's output
+      directly to brainstorm.md as it finishes (append, do not
+      overwrite):
+
+      1. **Sharpen the task.** Use the Skill tool to invoke
+         **pstack:sharpen**. It names the expert approach, what the
+         user is really after, and the right level of specification.
+         Capture its output verbatim under a `## Sharpen` heading.
+
+      2. **Restate goals.** Use the Skill tool to invoke
+         **pstack:in-your-own-words**. It restates the user's goals
+         and the problem being solved. Capture under `## Goals`.
+
+      3. **Explore the design.** Use the Skill tool to invoke
+         **pstack:architect**. It sketches types, signatures, and
+         module structure, with parallel design exploration when the
+         change is non-trivial. Capture under `## Design exploration`.
+
+      IMPORTANT output rules:
+      - brainstorm.md is a RAW CAPTURE. Preserve each skill's natural
+        output. Do not force a shared structure beyond the three
+        headings above.
+      - Do NOT pre-fill design.md during this step. design.md is a
+        separate artifact that reorganizes brainstorm.md into
+        Context / Goals / Decisions / Risks / Migration.
+    requires: []
+
+  - id: proposal
+    generates: proposal.md
+    description: Initial proposal document outlining the change
+    template: proposal.md
+    instruction: |
+      Create the proposal document based on brainstorm.md.
+
+      Read brainstorm.md and extract:
+      - **Why**: motivation (from the Sharpen and Goals sections)
+      - **What Changes**: specific changes agreed in Design exploration
+      - **Capabilities**:
+        - **New Capabilities**: new `specs/<name>/spec.md` entries, kebab-case
+        - **Modified Capabilities**: existing specs whose requirements change
+      - **Impact**: affected code, APIs, dependencies, systems
+
+      Since brainstorm already explored the problem space, this is a
+      concise extraction, not a new exploration.
+
+      The Capabilities section is critical. It is the contract between
+      proposal and specs phases. Each capability listed here needs a
+      spec file.
+
+      Keep it concise (1-2 pages). Focus on the "why" not the "how".
+    requires:
+      - brainstorm
+
+  - id: design
+    generates: design.md
+    description: Technical design document reorganized from brainstorm
+    template: design.md
+    instruction: |
+      Create the design document explaining HOW to implement the change.
+
+      Read brainstorm.md as input. It has three sections (Sharpen,
+      Goals, Design exploration). Reorganize that content into the
+      structured sections below. This is a transformation, not a copy.
+
+      Map:
+      - Sharpen + Goals -> design.md §Context + §Goals / Non-Goals
+      - Design exploration decisions -> design.md §Decisions
+      - Trade-offs surfaced during architecture -> §Risks / Trade-offs
+      - Add Migration Plan (may require inference)
+
+      Sections:
+      - **Context**: background, current state, constraints, stakeholders
+      - **Goals / Non-Goals**: what the design achieves and excludes
+      - **Decisions**: key technical choices with rationale. Include
+        alternatives considered per decision.
+      - **Risks / Trade-offs**: Format: [Risk] -> Mitigation
+      - **Migration Plan**: deploy steps, rollback (if applicable)
+      - **Open Questions**: outstanding decisions
+
+      Focus on architecture and approach, not line-by-line implementation.
+    requires:
+      - brainstorm
+
+  - id: specs
+    generates: "specs/**/*.md"
+    description: Detailed specifications for the change
+    template: spec.md
+    instruction: |
+      Create specification files that define WHAT the system should do.
+
+      One spec file per capability in the proposal's Capabilities section.
+      - New capabilities: use the exact kebab-case name
+        (specs/<capability>/spec.md).
+      - Modified capabilities: use the existing spec folder name from
+        openspec/specs/<capability>/.
+
+      Delta operations (use ## headers):
+      - **ADDED Requirements**: new capabilities
+      - **MODIFIED Requirements**: changed behavior, include full updated content
+      - **REMOVED Requirements**: deprecated features, include **Reason** and **Migration**
+      - **RENAMED Requirements**: name changes only, FROM:/TO: format
+
+      Format rules:
+      - `### Requirement: <name>` for each requirement
+      - Use SHALL/MUST for normative language
+      - `#### Scenario: <name>` with WHEN/THEN format
+      - **CRITICAL**: Scenarios MUST use exactly 4 hashtags (`####`).
+        3 hashtags or bullets will fail silently.
+      - Every requirement MUST have at least one scenario.
+    requires:
+      - proposal
+
+  - id: tasks
+    generates: tasks.md
+    description: Implementation checklist with trackable tasks
+    template: tasks.md
+    instruction: |
+      Create the task list that breaks down the implementation work.
+
+      **IMPORTANT: Follow the template exactly.** The apply phase
+      parses checkbox format to track progress. Tasks not using
+      `- [ ]` won't be tracked.
+
+      Guidelines:
+      - Group related tasks under ## numbered headings
+      - Each task MUST be a checkbox: `- [ ] X.Y Task description`
+      - Tasks should be small enough to complete in one session
+      - Order tasks by dependency
+
+      Reference specs for what and design.md for how.
+    requires:
+      - specs
+      - design
+
+  - id: plan
+    generates: plan.md
+    description: Micro-task implementation plan oriented for pstack:poteto-mode
+    template: plan.md
+    instruction: |
+      Write plan.md as a flat list of implementation steps that
+      pstack:poteto-mode will execute. Unlike superpowers-bridge,
+      which uses writing-plans to produce 2-5 minute TDD micro-steps,
+      the pstack plan.md documents coarse tasks + the data shape
+      first, then lets poteto-mode's routing (feature / bug-fix /
+      refactoring / perf-issue playbook) decide decomposition.
+
+      Required sections:
+      - **Goal**: one sentence
+      - **Data shape**: named data shape and its organizing structure
+        (state machine, typed model, table/registry, reducer). Chosen
+        BEFORE any implementation step. This is pstack's foundational
+        rule from the **principle-model-the-domain** principle skill.
+      - **Playbook hint**: which pstack playbook the apply phase
+        should route to (Feature / Bug fix / Refactoring / Perf issue /
+        Visual parity / other). poteto-mode may override this if its
+        own routing disagrees.
+      - **Steps**: ordered list, each with file paths, success
+        criteria, and (optionally) `[~]` to mark a step as deferred
+        to a dogfood / manual check.
+      - **Verification surface**: the matching surface (unit test,
+        integration test, UI driver, CLI driver). "Inconclusive" or
+        wrong-surface is not a pass.
+
+      Reference specs/ for what to build and design.md for architecture
+      decisions.
+
+      Do NOT invoke a pstack skill here. plan.md is a static document;
+      skill invocation happens in the apply phase.
+    requires:
+      - tasks
+
+  - id: verify
+    generates: verify.md
+    description: Post-implementation verification against specs, design, and tasks
+    template: verify.md
+    instruction: |
+      PRECHECK - implementation evidence:
+      Before producing verify.md, run BOTH commands. If either
+      returns 0, STOP and tell the user apply has not yet produced
+      reviewable changes.
+
+      1. Commit evidence (must return > 0):
+         git log --oneline $(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD origin/master 2>/dev/null)..HEAD | wc -l
+
+      2. Task progress (must return > 0):
+         grep -c '^- \[x\]' openspec/changes/<change-name>/tasks.md
+
+      Only after BOTH return positive numbers, proceed.
+
+      The verify step MUST perform the following checks and record
+      results in verify.md using the template:
+
+      1. **Structural validation**: Run `openspec validate --all --json`
+         and confirm every item returns `"valid": true`.
+
+      2. **Task completion**: Confirm every checkbox in tasks.md is
+         `- [x]`. For any `- [ ]` remaining, document the reason
+         (manual / out-of-scope / blocked) and whether it blocks archive.
+
+      3. **Delta spec sync state**: For each capability under
+         `openspec/changes/<name>/specs/`, compare against
+         `openspec/specs/<capability>/spec.md`.
+
+      4. **Design/specs coherence**: Spot-check that design.md
+         decisions align with specs/. Record drift as a warning.
+
+      5. **Implementation signal**: Confirm all code changes are
+         committed. This step applies the **principle-prove-it-works**
+         principle: verify against the real artifact (run the
+         feature, read the actual value, inspect the diff), not a
+         proxy or "it compiles".
+
+      6. **Verification surface check**: Confirm the surface named
+         in plan.md actually ran. "Inconclusive" or wrong-surface
+         is not a pass per pstack's Feature playbook step 5.
+
+      7. **Decision-trail capture (optional, warning-only)**: If
+         pstack:show-me-your-work ran during apply, confirm the TSV
+         trail (`.audit/<change-name>.tsv` or similar) exists and
+         has one row per non-trivial decision. Non-blocking - the
+         decision trail is optional unless the task triggered
+         show-me-your-work's criteria.
+
+      8. **Deferred dogfood vs automated-test equivalence**: If
+         plan.md has `[~]` deferred steps, enumerate each in verify.md
+         and identify the equivalent automated test. If no equivalent
+         exists, that row is a real coverage gap - record in
+         retrospective Misses.
+
+      verify MAY be re-run multiple times. Each run overwrites verify.md.
+    requires:
+      - plan
+
+  - id: retrospective
+    generates: retrospective.md
+    description: Evidence-first retrospective of completed change
+    template: retrospective.md
+    instruction: |
+      PRECHECK - verify completion evidence:
+      Before producing retrospective.md, run these commands.
+
+      1. verify.md exists:
+         test -f openspec/changes/<change-name>/verify.md
+
+      2. verify.md's Overall Decision is NOT FAIL:
+         ! grep -q '^- \[x\] ❌ FAIL' openspec/changes/<change-name>/verify.md
+
+      Only after both succeed, proceed.
+
+      The pstack retrospective combines two skills:
+
+      - **pstack:reflect** spawns three parallel review subagents
+        over the transcript and surfaces learnings. Its output goes
+        under §1-§5 of retrospective.md.
+      - **pstack:show-me-your-work** (if it ran during apply) wrote
+        a TSV decision trail. Fold that into §0 Evidence.
+
+      Process:
+
+      1. **Gather evidence**
+         - Run `git log --oneline <base>..HEAD` for the commit range
+         - Read brainstorm.md, plan.md, tasks.md
+         - If verify.md has warnings, note them for §2 Misses
+
+      2. **Invoke pstack:reflect**. Use the Skill tool. It returns
+         learnings routed to concrete skill edits. Capture its
+         output under the relevant retrospective sections.
+
+      3. **Write §0 Evidence** - quantitative front-matter populated
+         from `git log`, `tasks.md`, verify.md, and the
+         show-me-your-work TSV if present. See template for fields.
+
+      4. **Write §1-§6** - Wins, Misses (by severity emoji),
+         Plan deviations, Workflow compliance (per-skill checklist),
+         Surprises, Promote candidates. Each claim cites a commit,
+         file, test, or measurable fact.
+
+      5. **Trivial-change opt-out**: single-commit linter fixes and
+         the like may skip retrospective.md with a one-liner reason.
+         Anything else: produce §0 plus all six analysis sections.
+
+      6. **Forward-pointer policy**: if later cycles invalidate a
+         claim here, add `> **Update YYYY-MM-DD**: section X superseded
+         by <link>` rather than rewriting. The audit trail matters.
+    requires:
+      - verify
+
+apply:
+  requires: [plan]
+  tracks: tasks.md
+  instruction: |
+    Before implementing, confirm the pstack executor is available:
+
+    0. **Pre-flight - verify required pstack skills**:
+
+       - pstack:poteto-mode
+       - pstack:show-me-your-work (used in verify + retrospective)
+       - pstack:make-pr-easy-to-review (used in finishing)
+
+       If any are missing, STOP and inform the user. Do NOT silently
+       fall back to manual implementation.
+
+       Confirm expected CLI tools are on PATH (read plan.md for the
+       list - e.g., `node`, `python3`, `jq`, `gh`). Missing tools
+       surface as WARNING, not STOP.
+
+    1. **Workspace**: Create an isolated git worktree for this change.
+       pstack does not ship using-git-worktrees; use plain
+       `git worktree add` or your runtime's equivalent. The branch
+       name should include the change id so poteto-mode's routing
+       and the PR owner stay aligned.
+
+    2. **Executor - pstack:poteto-mode**:
+
+       Use the Skill tool to invoke **pstack:poteto-mode**. It is
+       the single executor for pstack-bridge. poteto-mode reads the
+       task and routes to the right playbook (Feature / Bug fix /
+       Refactoring / Perf issue / Visual parity / other).
+
+       Tell the executor:
+       - Read plan.md for the Goal, Data shape, Playbook hint, and Steps
+       - Read design.md and specs/ for architectural context
+       - Update tasks.md checkboxes as tasks complete
+       - Work within the created worktree
+       - Record non-trivial decisions via pstack:show-me-your-work
+         when the task meets its criteria (autonomous or multi-phase
+         run, or work a human reviews after stepping away)
+
+       IMPORTANT - what poteto-mode does and does NOT force:
+       - It DOES route to a pstack playbook and apply pstack's
+         principles (model-the-domain, prove-it-works, fix-root-causes,
+         boundary-discipline, etc.).
+       - It does NOT force TDD. pstack's tdd skill is opt-in. If a
+         test path is unclear or expensive, poteto-mode skips TDD
+         and verifies on the matching real surface instead
+         (**principle-prove-it-works**).
+       - It does NOT force a specific code-review skill. Review
+         happens via the Feature playbook (interrogate when the
+         design is contested) and the Opening-a-PR playbook (which
+         can invoke thermos / thermo-nuclear-review on demand).
+
+       If your platform lacks subagent dispatch, poteto-mode still
+       runs - it falls back to a single-agent execution per its
+       Subagents section. The schema does not require subagent
+       support.
+
+    3. **Verification**: When all tasks are done, produce the
+       `verify` artifact (see its instruction). Re-run verify until
+       all blocking issues resolve.
+
+    4. **Retrospective (write while context is hot)**:
+
+       Once verify.md shows no blocking issues, produce the
+       `retrospective` artifact BEFORE opening any PR. It is part of
+       this cycle's deliverables and lands in the same PR as the
+       implementation.
+
+    5. **Archive (sync spec delta + move folder)**:
+
+       After retrospective.md is written, run `openspec archive -y`
+       (or your runtime's equivalent). This syncs delta specs into
+       `openspec/specs/<capability>/spec.md` and moves the change
+       folder to `openspec/changes/archive/YYYY-MM-DD-<name>/`.
+
+    6. **Completion (PR is the LAST step)**:
+
+       After retrospective + archive are both done, invoke
+       **pstack:make-pr-easy-to-review** to clean up commit history
+       and PR description, then open the PR. If the pstack
+       Opening-a-PR playbook is loaded (via poteto-mode), follow it;
+       otherwise use your runtime's PR skill.
+
+       The PR diff MUST contain the complete archived cycle. If it
+       doesn't (retrospective or archive was skipped), STOP and
+       complete those first.
