@@ -38,6 +38,10 @@ requirement.
 
 MUST include the full updated content (not a diff). OpenSpec archive
 applies MODIFIED as a whole-text replacement.
+
+Keep every existing scenario name verbatim; validate rejects a
+MODIFIED block that drops one. When the behaviour changes, rewrite
+the scenario body so it still matches its name.
 -->
 
 ### Requirement: <!-- same header as the existing spec -->

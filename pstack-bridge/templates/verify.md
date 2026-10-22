@@ -142,6 +142,20 @@ retrospective Misses.
 
 ---
 
+## 10. Harness Deviations
+
+Every way the verification harness differed from its documented
+setup. Any row here caps the Overall Decision at PASS WITH WARNINGS.
+
+| Deviation | Why | Effect on the verdict | Issue |
+|---|---|---|---|
+| — | — | — | — |
+
+Evidence cited in this report lives in
+`openspec/changes/<change-name>/evidence/`.
+
+---
+
 ## Overall Decision
 
 - [ ] PASS — proceed to retrospective and archive
