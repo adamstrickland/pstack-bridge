@@ -240,6 +240,11 @@ artifacts:
 
       4. **Design/specs coherence**: Spot-check that design.md
          decisions align with specs/. Record drift as a warning.
+         Exception: when a capability is a contract shared by more
+         than one implementation (e.g. the same behaviour in two
+         languages), a behaviour difference no scenario covers is a
+         spec gap, not drift. Add the scenario, or file an issue and
+         link it in verify.md.
 
       5. **Implementation signal**: Confirm all code changes are
          committed. This step applies the **principle-prove-it-works**
@@ -263,6 +268,18 @@ artifacts:
          and identify the equivalent automated test. If no equivalent
          exists, that row is a real coverage gap - record in
          retrospective Misses.
+
+      9. **Evidence lives in the change folder**: copy every piece
+         of evidence verify.md cites (command output, query results,
+         logs) into `openspec/changes/<change-name>/evidence/` as
+         soon as it exists. Scratch and temp directories do not
+         survive a re-login.
+
+      10. **Harness deviations**: list every way the verification
+          harness differed from the documented setup (a pinned
+          image, a changed threshold, a skipped service). Any
+          deviation makes the Overall Decision at best PASS WITH
+          WARNINGS.
 
       verify MAY be re-run multiple times. Each run overwrites verify.md.
     requires:
@@ -347,6 +364,14 @@ apply:
        name should include the change id so poteto-mode's routing
        and the PR owner stay aligned.
 
+       - Fetch and rebase onto the current remote base BEFORE
+         creating the worktree or any delegate worktree, and name
+         the base SHA in every delegate brief.
+       - Before fanning delegates with heavy toolchains (Rust, C++,
+         and the like) into separate worktrees, check free disk and
+         share or hand off one build cache. Read a linker crash, bus
+         error, or failed write as "disk full" first.
+
     2. **Executor - pstack:poteto-mode**:
 
        Use the Skill tool to invoke **pstack:poteto-mode**. It is
@@ -362,6 +387,18 @@ apply:
        - Record non-trivial decisions via pstack:show-me-your-work
          when the task meets its criteria (autonomous or multi-phase
          run, or work a human reviews after stepping away)
+       - When the change is a library with a known first consumer,
+         put that consumer's framework idioms and lint level in the
+         implementer's brief, and name a run inside that consumer
+         as the verification surface
+       - When a run during apply disproves a design.md claim about
+         an external tool, amend design.md with a dated note and the
+         evidence, and list the amendment as an operator-facing
+         decision in the PR description
+
+       Under a carry-through grant ("take it to a PR", "wrap it
+       up"), never end a turn on a bare delegate result: review the
+       delegate's diff and start the next step in the same turn.
 
        IMPORTANT - what poteto-mode does and does NOT force:
        - It DOES route to a pstack playbook and apply pstack's
@@ -383,19 +420,26 @@ apply:
 
     3. **Verification**: When all tasks are done, produce the
        `verify` artifact (see its instruction). Re-run verify until
-       all blocking issues resolve.
+       all blocking issues resolve. Read its template and PRECHECK
+       from `openspec instructions verify --change <name> --json`
+       (the `.template` and `.instruction` fields).
 
     4. **Retrospective (write while context is hot)**:
 
        Once verify.md shows no blocking issues, produce the
        `retrospective` artifact BEFORE opening any PR. It is part of
        this cycle's deliverables and lands in the same PR as the
-       implementation.
+       implementation. Read its template and PRECHECK from
+       `openspec instructions retrospective --change <name> --json`.
 
     5. **Archive (sync spec delta + move folder)**:
 
-       After retrospective.md is written, run `openspec archive -y`
-       (or your runtime's equivalent). This syncs delta specs into
+       After retrospective.md is written, archive with
+       `/opsx:archive` (or your runtime's equivalent), not a raw
+       `openspec archive -y`, so open tasks surface. If apply has to
+       archive a sibling change, first carry each of its unticked
+       tasks into this change's tasks.md or into a filed issue.
+       Archiving syncs delta specs into
        `openspec/specs/<capability>/spec.md` and moves the change
        folder to `openspec/changes/archive/YYYY-MM-DD-<name>/`.
 
@@ -410,3 +454,7 @@ apply:
        The PR diff MUST contain the complete archived cycle. If it
        doesn't (retrospective or archive was skipped), STOP and
        complete those first.
+
+       The independent review MUST cover the final head. Before
+       opening the PR, compare the last reviewed SHA with HEAD; any
+       code-changing commit after it reopens the review gate.
